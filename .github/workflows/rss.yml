@@ -1,0 +1,34 @@
+name: RSS to Slack (Sedaily Realestate)
+
+on:
+  schedule:
+    # KST 06:00~20:00 hourly
+    # UTC 기준: 21-23,0-11 at minute 0
+    - cron: "0 21-23,0-11 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Run
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: npm run start
+
+      - name: Commit sent.json
+        run: |
+          git config user.name "rss-bot"
+          git config user.email "rss-bot@users.noreply.github.com"
+          git add sent.json
+          git diff --cached --quiet || (git commit -m "Update sent items" && git push)
