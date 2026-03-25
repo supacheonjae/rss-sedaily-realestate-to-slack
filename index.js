@@ -78,13 +78,68 @@ async function postToSlack({ title, link, author, pubDate }) {
   );
 }
 
-async function main() {
-  const parser = new Parser({
-    headers: { "User-Agent": "rss-to-slack/1.0" },
+function extractCookieHeader(setCookie = []) {
+  return setCookie.map((cookie) => cookie.split(";")[0]).join("; ");
+}
+
+async function requestFeed(url, headers) {
+  return axios.get(url, {
+    headers,
+    responseType: "text",
+    timeout: 20000,
+    maxRedirects: 5,
+    validateStatus: () => true,
   });
+}
+
+async function fetchFeedXml(url) {
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    "Accept":
+      "application/rss+xml, application/xml, text/xml;q=0.9, text/html;q=0.8, */*;q=0.7",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://www.sedaily.com/",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+  };
+
+  let response = await requestFeed(url, headers);
+
+  if (response.status === 403) {
+    const homepage = await requestFeed("https://www.sedaily.com/", headers);
+    const sessionCookie = extractCookieHeader(homepage.headers["set-cookie"] || []);
+
+    if (sessionCookie) {
+      response = await requestFeed(url, {
+        ...headers,
+        Cookie: sessionCookie,
+      });
+    }
+  }
+
+  if (response.status >= 200 && response.status < 300) {
+    return response.data;
+  }
+
+  const snippet =
+    typeof response.data === "string"
+      ? response.data.replace(/\s+/g, " ").slice(0, 300)
+      : "";
+
+  throw new Error(
+    `Failed to fetch RSS feed: HTTP ${response.status}${
+      response.statusText ? ` ${response.statusText}` : ""
+    }${snippet ? ` | body: ${snippet}` : ""}`
+  );
+}
+
+async function main() {
+  const parser = new Parser();
 
   const sent = loadSent();
-  const feed = await parser.parseURL(RSS_URL);
+  const feedXml = await fetchFeedXml(RSS_URL);
+  const feed = await parser.parseString(feedXml);
 
   const items = (feed.items || []).slice(0, MAX_ITEMS_PER_RUN);
 
