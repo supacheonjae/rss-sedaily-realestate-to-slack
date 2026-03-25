@@ -2,9 +2,9 @@ name: RSS to Slack (Sedaily Realestate)
 
 on:
   schedule:
-    # KST 06:00~20:00 hourly
-    # UTC 기준: 21-23,0-11 at minute 0
-    - cron: "0 21-23,0-11 * * *"
+    # KST 06:00, 09:00, 12:00, 15:00, 18:00
+    # UTC 기준: 21,0,3,6,9 at minute 0
+    - cron: "0 21,0,3,6,9 * * *"
   workflow_dispatch:
 
 jobs:
