@@ -92,6 +92,17 @@ async function requestFeed(url, headers) {
   });
 }
 
+function buildFeedFetchErrorMessage(response) {
+  const snippet =
+    typeof response.data === "string"
+      ? response.data.replace(/\s+/g, " ").slice(0, 300)
+      : "";
+
+  return `Failed to fetch RSS feed: HTTP ${response.status}${
+    response.statusText ? ` ${response.statusText}` : ""
+  }${snippet ? ` | body: ${snippet}` : ""}`;
+}
+
 async function fetchFeedXml(url) {
   const headers = {
     "User-Agent":
@@ -122,16 +133,14 @@ async function fetchFeedXml(url) {
     return response.data;
   }
 
-  const snippet =
-    typeof response.data === "string"
-      ? response.data.replace(/\s+/g, " ").slice(0, 300)
-      : "";
+  const errorMessage = buildFeedFetchErrorMessage(response);
 
-  throw new Error(
-    `Failed to fetch RSS feed: HTTP ${response.status}${
-      response.statusText ? ` ${response.statusText}` : ""
-    }${snippet ? ` | body: ${snippet}` : ""}`
-  );
+  if (response.status === 403) {
+    console.warn(`${errorMessage} | skipping this run without failure`);
+    return null;
+  }
+
+  throw new Error(errorMessage);
 }
 
 async function main() {
@@ -139,6 +148,10 @@ async function main() {
 
   const sent = loadSent();
   const feedXml = await fetchFeedXml(RSS_URL);
+  if (!feedXml) {
+    console.log("Skipped because RSS feed access was forbidden.");
+    return;
+  }
   const feed = await parser.parseString(feedXml);
 
   const items = (feed.items || []).slice(0, MAX_ITEMS_PER_RUN);
